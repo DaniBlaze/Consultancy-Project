@@ -9,14 +9,24 @@ Created on Mon Nov  9 22:12:48 2020
 import pandas as pd
 import path 
 import numpy as np
- 
+
+# Red and green zone
+red_lat_min = -20.2003
+red_lat_max = -20.0359
+red_long_min = 118.4100
+red_long_max = 118.7464
+green_lat_min = -20.3546 
+green_lat_max = -20.3076
+green_long_min = 118.5445
+green_long_max = 118.6084
+  
 # Reading csv-file using a relative path, based on the folder structure of the github project
 file_path = path.Path(__file__).parent / "../OriginalDataset/B.csv"
 with file_path.open() as dataset_file:
     df = pd.read_csv(dataset_file, names=["Imo", "RecievedTime", "Latitude", "Longitude", "NavStatus", "Status"])
     df["RecievedTime"] = pd.to_datetime(df["RecievedTime"])
 
-def filter_based_on_lat_long(df, red_lat_min, red_lat_max, red_long_min, red_long_max, green_lat_min, green_lat_max, green_long_min, green_long_max):
+def filter_based_on_lat_long(df):
     zone_red_green_query = np.where(((df["Latitude"] >= red_lat_min) & (df["Latitude"] <= red_lat_max) & (df["Longitude"] >= red_long_min) & (df["Longitude"] <= red_long_max)) 
                           | ((df["Latitude"] >= green_lat_min) & (df["Latitude"] <= green_lat_max) & (df["Longitude"] >= green_long_min) & (df["Longitude"] <= green_long_max)))
     return df.loc[zone_red_green_query]
@@ -28,7 +38,7 @@ def append_to_wait_lists(first_waiting_entry, latest_moored_entry, first_wait_im
     first_wait_longitude_observations.append(first_waiting_entry.Longitude)
     first_wait_nav_status.append(first_waiting_entry.NavStatus)
     full_wait_time.append(latest_moored_entry.RecievedTime - first_waiting_entry.RecievedTime)
-   
+    
 def generate_df_with_first_wait_observation_and_full_waiting_time_per_vessel(df_group_by_boat_id):
     first_wait_imo_observations = []
     first_wait_received_time_observations = []
@@ -47,8 +57,8 @@ def generate_df_with_first_wait_observation_and_full_waiting_time_per_vessel(df_
                 first_waiting_entry = None
                 latest_moored_entry = None
             if (observation.NavStatus == 1 or 'anchorage' in observation.Status) and first_waiting_entry is None:
-                first_waiting_entry = observation
-            elif (observation.NavStatus == 5 or 'moored' in observation.Status) and latest_moored_entry is None:
+                first_waiting_entry = observation                
+            elif (observation.NavStatus == 5 or 'moored' in observation.Status) and latest_moored_entry is None and first_waiting_entry is not None:
                 latest_moored_entry = observation
         if (latest_moored_entry is not None) and (first_waiting_entry is not None):
             append_to_wait_lists(first_waiting_entry, latest_moored_entry, first_wait_imo_observations, first_wait_received_time_observations, first_wait_latitude_observations, first_wait_longitude_observations, first_wait_nav_status, full_wait_time)
@@ -109,8 +119,10 @@ def generate_enhanced_dataset(df):
     # Grouping observations per vessel (imo = id of vessel). Sorting is preserved.
     df_group_by_boat_id = df.groupby(["Imo"])
     
+    # Generate a dataframe containing each new 'Start-waiting-observation' with the wait time it took for the given vessel to first wait and then become moored.
+    # Note: The same boat can have mutliple 'Start-waiting-observations' as the dataset expands for a long time
     df_first_waiting_observations_with_full_wait_time = generate_df_with_first_wait_observation_and_full_waiting_time_per_vessel(df_group_by_boat_id)
-    
+
     # Keep track of each vessel state for each 'Start-waiting observation':
     underway_count = []
     waiting_count = []
@@ -123,17 +135,22 @@ def generate_enhanced_dataset(df):
     print('Unique vessels: ', len(df_group_by_boat_id))
     print('Start-waiting observations: ', len(df_first_waiting_observations_with_full_wait_time))
     
+    # Loop through each 'Start-waiting-observation' event
     for row in df_first_waiting_observations_with_full_wait_time.itertuples():
         print(row.Index)
         append_default_value_to_count_lists(underway_count, waiting_count, moored_count, finished_count, other_count)
+        
+        # For each 'Start-waiting-observation' event we need to find the state of every other vessel within this 'Start-waiting-observation' ReceivedTime.
+        # This will give us how many vessels are waiting and moored at this exact time.
         for imo, imo_observations in df_group_by_boat_id:
             update_count_lists(imo_observations, row.RecievedTime, row.Index, underway_count, waiting_count, moored_count, finished_count, other_count)
     add_count_to_df(df_first_waiting_observations_with_full_wait_time, underway_count, waiting_count, moored_count, finished_count, other_count)
     return df_first_waiting_observations_with_full_wait_time
-            
 
-df = filter_based_on_lat_long(df, -20.2003, -20.0359, 118.4100, 118.7464, -20.3546, -20.3076, 118.5445, 118.6084)
+# Find all observations within red and green zone
+df = filter_based_on_lat_long(df)
 df.to_csv("../GeneratedDataset/PortHedlandRedAndGreenZone.csv")
 
+# Generate dataset that holds only first-waiting-observation, with its full wait time and the state of all other vessels.
 df = generate_enhanced_dataset(df)
 df.to_csv("../GeneratedDataset/PortHedlandWithCount.csv")
