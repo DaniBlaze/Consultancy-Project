@@ -6,32 +6,38 @@ Created on Fri Nov 13 13:43:45 2020
 @author: Dani
 """
 import pandas as pd
-import path 
+import path
+from sklearn.preprocessing import MinMaxScaler
 
+
+def set_numerical_value_for_vessel_type(df):
+    for index in df.index:
+        if df.loc[index, 'type'] == 'Bulk Carrier':
+            df.loc[index, 'type'] = 1
+        elif df.loc[index, 'type'] == 'Ore Carrier':
+            df.loc[index, 'type'] = 2
+        else:
+            df.loc[index, 'type'] = 3
+            
 file_path = path.Path(__file__).parent / "../FinalDataset.csv"
 with file_path.open() as dataset_file:
     df_final_dataset = pd.read_csv(dataset_file)
-    df_final_dataset.to_csv("../ANN/FinalDatasetWOHeader.csv", header=False)
+    set_numerical_value_for_vessel_type(df_final_dataset)
+    df_final_dataset= df_final_dataset.iloc[: , [2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 15]]
+    df_final_dataset.to_csv("../ANN/FinalDatasetPrepared.csv", index=False)
     
-file_path = path.Path(__file__).parent / "../ANN/FinalDatasetWOHeader.csv"
+file_path = path.Path(__file__).parent / "../ANN/FinalDatasetPrepared.csv"
 with file_path.open() as dataset_file:
-    df_wo_head = pd.read_csv(dataset_file)
-    df_normalized = df_wo_head.iloc[: , [6, 7, 8]]
-    print(df_normalized.head())
-    
-# Find the min and max values for each column
-def dataset_minmax(dataset):
-    for column in zip(*dataset):
-        print(column)
-	#stats = [[min(column), max(column)] for column in zip(*dataset)]
-	#return stats
+    df_to_be_normalized = pd.read_csv(dataset_file)
 
-# Rescale dataset columns to the range 0-1
-def normalize_dataset(dataset, minmax):
-	for row in dataset:
-		for i in range(len(row)-1):
-			row[i] = (row[i] - minmax[i][0]) / (minmax[i][1] - minmax[i][0])
-            
+def normalize_dataset(df):
+    scalar = MinMaxScaler()
+    df_matrix = df.to_numpy()
+    return scalar.fit_transform(df_matrix)
 
-stats = dataset_minmax(df_normalized)
-print(stats)
+normalized = normalize_dataset(df_to_be_normalized)
+print(normalized.shape)
+df_prepared_and_normalized=pd.DataFrame(data=normalized[0:,0:],
+                                        index=[i for i in range(normalized.shape[0])],
+                                        columns=['f'+str(i) for i in range(normalized.shape[1])])
+df_prepared_and_normalized.to_csv("../ANN/FinalDatasetPreparedAndNormalized.csv", header=False, index=False)
