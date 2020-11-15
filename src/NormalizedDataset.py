@@ -40,4 +40,4 @@ print(normalized.shape)
 df_prepared_and_normalized=pd.DataFrame(data=normalized[0:,0:],
                                         index=[i for i in range(normalized.shape[0])],
                                         columns=['f'+str(i) for i in range(normalized.shape[1])])
-df_prepared_and_normalized.to_csv("../ANN/FinalDatasetPreparedAndNormalized.csv", header=False, index=False)
+df_prepared_and_normalized.to_csv("../ANN/FinalDatasetPreparedAndNormalized.csv", index=False)
