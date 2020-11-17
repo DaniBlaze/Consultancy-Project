@@ -32,8 +32,8 @@ with file_path.open() as dataset_file:
 
 def normalize_dataset(df):
     scalar = MinMaxScaler()
-    df_matrix = df.to_numpy()
-    return scalar.fit_transform(df_matrix)
+    matrix = df.to_numpy()
+    return scalar.fit_transform(matrix)
 
 normalized = normalize_dataset(df_to_be_normalized)
 print(normalized.shape)
